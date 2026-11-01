@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir, hostname } from 'os'
 import { join } from 'path'
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import chalk from 'chalk'
 import { findAvailablePort } from '../lib/port.js'
 import { createWebhookServer, type PREvent } from '../github/webhook.js'
@@ -105,7 +105,7 @@ async function handlePR(event: PREvent, config: ReturnType<typeof loadConfig>, t
   const tmpDir = mkdtempSync(join(tmpdir(), 'crosscheck-repo-'))
 
   try {
-    execSync(`gh repo clone ${owner}/${repoName} ${tmpDir} -- --depth=50 --quiet`, { stdio: 'pipe', env: { ...process.env, GITHUB_TOKEN: token, GH_TOKEN: token } })
+    execFileSync('gh', ['repo', 'clone', `${owner}/${repoName}`, tmpDir, '--', '--depth=50', '--quiet'], { stdio: 'pipe', env: { ...process.env, GITHUB_TOKEN: token, GH_TOKEN: token } })
     execSync(`git fetch origin pull/${prNumber}/head:pr-${prNumber}`, { cwd: tmpDir, stdio: 'pipe' })
     execSync(`git checkout pr-${prNumber}`, { cwd: tmpDir, stdio: 'pipe' })
     try {

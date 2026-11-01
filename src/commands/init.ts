@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import chalk from 'chalk'
 import { checkCodexAuth } from '../reviewers/codex.js'
@@ -136,9 +137,9 @@ export async function runInit(configPath?: string) {
   const dest = configPath ?? resolveConfigPath() ?? join(homedir(), '.crosscheck', 'config.yml')
   mkdirSync(join(homedir(), '.crosscheck'), { recursive: true })
   if (!existsSync(dest)) {
-    const examplePath = new URL('../../crosscheck.config.example.yml', import.meta.url).pathname
+    const examplePath = fileURLToPath(new URL('../../crosscheck.config.example.yml', import.meta.url))
     if (existsSync(examplePath)) {
-      let content = readFileSync(examplePath, 'utf8')
+      let content = readFileSync(examplePath, 'utf8').replace(/\r\n/g, '\n')
       const login = detectGitHubLogin()
       if (login) {
         // Uncomment allowed_authors placeholder
@@ -153,6 +154,7 @@ export async function runInit(configPath?: string) {
           `  author_routes:\n    ${login}: claude  # auto-detected from gh auth\n`,
         )
       }
+      mkdirSync(dirname(dest), { recursive: true })
       writeFileSync(dest, content)
       const hint = login ? `allowed_authors and author_routes set to ${chalk.cyan(login)}` : 'edit to customize'
       console.log(chalk.dim(`Config written to ${dest} — ${hint}.\n`))

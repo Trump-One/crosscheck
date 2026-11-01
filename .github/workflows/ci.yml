@@ -4,14 +4,16 @@ on:
   push:
     branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   check:
-    name: Typecheck & build
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node: ['18', '20', '22']
 
     steps:
@@ -27,8 +29,20 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
       - name: Build
         run: npm run build
 
       - name: Verify binary is executable
-        run: test -x dist/cli.js
+        if: runner.os != 'Windows'
+        run: test -x dist/cli.js && test -x dist/ck.js
+
+      - name: Verify CLI entry points
+        run: |
+          node dist/cli.js --version
+          node dist/ck.js --help
