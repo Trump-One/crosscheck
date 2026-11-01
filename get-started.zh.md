@@ -696,9 +696,9 @@ crosscheck webhook 服务器
     ▼
 将 PR 分支克隆到临时目录
     │
-    ├─ codex review --base <branch>       ← 非交互式 Codex 审查
+    ├─ codex exec --output-schema ...     ← 结构化 Codex 审查
     │  或
-    └─ claude --print --bare ...          ← 非交互式 Claude 审查
+    └─ claude --print --json-schema ...   ← 结构化 Claude 审查
             │
             ▼
     通过 GitHub API 在 PR 中发布评论
@@ -725,25 +725,27 @@ crosscheck webhook 服务器
 ### Codex 审查如何运行
 
 ```bash
-codex review --base <base-branch> --title "<pr-title>"
+codex exec --sandbox read-only --output-schema <schema.json> --output-last-message <review.json> -
 ```
 
-`--base` 标志将当前 HEAD 与基础分支进行差异比较——与 PR diff 完全一致。使用 `auth: subscription` 时不传入模型参数。使用 `auth: api-key` 时，模型由质量层级决定（`fast` → `gpt-4o-mini`，`balanced` → `o4-mini`，`thorough` → `o3`）。
+crosscheck 将基础分支（也支持仅存在于远端的分支）解析为提交，再通过 stdin 传入 PR diff 范围和步骤指令。JSON schema 要求审查正文和结论都存在；缺失或格式错误会使审查失败，不会被当作批准。临时 schema 和结果文件会在命令结束后清理。使用 `auth: subscription` 时不传入模型参数；`auth: api-key` 下，显式配置的模型优先于质量层级默认值。
 
 ### Claude 审查如何运行
 
 ```bash
 claude \
-  --print --bare \
+  --print --output-format json \
   --model claude-sonnet-4-6 \
   --effort medium \
   --max-budget-usd 2.00 \
-  --output-last-message /tmp/review.md \
-  --allowedTools "Bash(git diff),Bash(git log)" \
-  "<prompt>"
+  --json-schema '<review-and-verdict-schema>' \
+  --no-session-persistence --setting-sources user \
+  --permission-mode dontAsk \
+  --tools "Read,Glob,Grep,Bash" \
+  --allowedTools "Read,Glob,Grep,Bash(git diff *),Bash(git log *),Bash(git show *)"
 ```
 
-`--bare` 使执行快速且确定性。`--allowedTools` 将 Claude 限制为只能在克隆的仓库上执行只读的 git 操作。
+提示词通过 stdin 传入，crosscheck 校验 Claude JSON 响应中的 `structured_output`。不使用 `--bare`，以保留订阅认证支持。调用排除项目设置，工具权限允许读取文件和查看 git 历史、差异。显式配置的 `vendors.claude.model` 优先于质量层级默认值。两种适配器都会将结构化结论转换成工作流现有的 `VERDICT:` 格式。Claude 认证通过 `claude auth status --json` 检查，不再以 CLI 版本代替登录状态。
 
 ### 去重
 

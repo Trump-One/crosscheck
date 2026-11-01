@@ -1,9 +1,10 @@
 import { execa } from 'execa'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { QualityConfig, CodexVendorConfig } from '../config/schema.js'
 import { DEFAULT_REVIEW_INSTRUCTIONS } from '../lib/workflow.js'
+import { formatReviewResult, REVIEW_OUTPUT_SCHEMA } from './result.js'
 
 // Scans stderr bottom-up for the first fatal/error line, skipping Codex header boilerplate.
 function extractErrorSummary(stderr: string): string | undefined {
@@ -46,39 +47,45 @@ export async function runCodexReview(
   const model = vendor.auth === 'api-key'
     ? (vendor.model ?? TIER_MODELS_API[quality.tier] ?? 'o4-mini')
     : undefined
-  const tmpFile = join(mkdtempSync(join(tmpdir(), 'crosscheck-')), 'review.md')
+  const outputDir = mkdtempSync(join(tmpdir(), 'crosscheck-'))
+  const schemaFile = join(outputDir, 'schema.json')
+  const outputFile = join(outputDir, 'review.json')
 
-  // --base and [PROMPT] are mutually exclusive in codex review;
-  // inject focus instructions via a .codex/instructions file instead
   const focusNote = quality.focus.length > 0
     ? `Focus areas: ${quality.focus.join(', ')}. `
     : ''
   const customNote = quality.custom_prompt ?? ''
   const behaviorInstructions = stepInstructions ?? DEFAULT_REVIEW_INSTRUCTIONS
-  const instructionsNote = [focusNote, customNote, behaviorInstructions].filter(Boolean).join('\n\n')
-  mkdirSync(`${repoDir}/.codex`, { recursive: true })
-  writeFileSync(`${repoDir}/.codex/instructions`, instructionsNote)
-
   try {
-    const modelArgs = model ? ['-c', `model="${model}"`] : []
-    onLog?.(`  running: codex review --base ${baseBranch}${model ? ` -c model="${model}"` : ''}`)
+    // Clone workflows may fetch only origin/<base>, without a local branch.
+    const { stdout: base } = await execa('git', ['rev-parse', '--verify', '--end-of-options', `${baseBranch}^{commit}`], { cwd: repoDir })
+      .catch(() => execa('git', ['rev-parse', '--verify', '--end-of-options', `origin/${baseBranch}^{commit}`], { cwd: repoDir }))
+    const baseSha = base.trim()
+    if (!/^[a-f0-9]{40,64}$/i.test(baseSha)) throw new Error('Could not resolve the review base commit')
+    const prompt = [
+      `Review the pull request titled ${JSON.stringify(prTitle)}.`,
+      `Review only changes in git diff ${baseSha}...HEAD.`,
+      'Inspect source files for correctness, security, and regressions. Do not modify files.',
+      focusNote, customNote, behaviorInstructions,
+      'Return the review and verdict using the required JSON schema.',
+    ].filter(Boolean).join('\n\n')
+    writeFileSync(schemaFile, JSON.stringify(REVIEW_OUTPUT_SCHEMA))
+    const modelArgs = model ? ['--model', model] : []
+    onLog?.(`  running: codex exec (review base ${baseBranch})${model ? ` --model ${model}` : ''}`)
 
     const timeoutMs = TIER_TIMEOUT_MS[quality.tier] ?? 600_000
-    const result = await execa(
+    await execa(
       'codex',
-      ['review', '--base', baseBranch, '--title', prTitle, ...modelArgs],
+      ['exec', '--sandbox', 'read-only', '--output-schema', schemaFile, '--output-last-message', outputFile, '--color', 'never', ...modelArgs, '-'],
       {
         cwd: repoDir,
         timeout: timeoutMs,
-        env: {
-          ...process.env,
-          // Make local dev tools (tsc, jest, etc.) findable if node_modules exists
-          PATH: `${repoDir}/node_modules/.bin:${process.env.PATH ?? ''}`,
-        },
+        input: prompt,
+        env: { ...process.env },
       },
     )
 
-    return result.stdout.trim() || result.stderr.trim()
+    return formatReviewResult(JSON.parse(readFileSync(outputFile, 'utf8')) as unknown)
   } catch (err: unknown) {
     const execa = err as { stdout?: string; stderr?: string; message?: string; exitCode?: number; timedOut?: boolean }
     const rawStderr = execa.stderr ?? ''
@@ -93,14 +100,14 @@ export async function runCodexReview(
     })
     throw thrown
   } finally {
-    try { rmSync(tmpFile, { force: true, recursive: true }) } catch { /* ignore */ }
+    rmSync(outputDir, { force: true, recursive: true })
   }
 }
 
 export async function checkCodexAuth(): Promise<{ ok: boolean; detail: string }> {
   try {
-    const { stdout } = await execa('codex', ['login', 'status'], { timeout: 10_000 })
-    return { ok: true, detail: stdout.trim() }
+    const { stdout, stderr } = await execa('codex', ['login', 'status'], { timeout: 10_000 })
+    return { ok: true, detail: stdout.trim() || stderr.trim() }
   } catch (err: unknown) {
     const error = err as { stderr?: string; message?: string }
     return { ok: false, detail: error.stderr ?? error.message ?? 'not authenticated' }

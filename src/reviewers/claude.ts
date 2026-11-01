@@ -1,9 +1,7 @@
 import { execa } from 'execa'
-import { readFileSync, writeFileSync, mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
 import type { QualityConfig, VendorConfig } from '../config/schema.js'
 import { DEFAULT_REVIEW_INSTRUCTIONS } from '../lib/workflow.js'
+import { parseClaudeReview, REVIEW_OUTPUT_SCHEMA } from './result.js'
 
 const TIER_MODELS: Record<string, string> = {
   fast: 'claude-haiku-4-5-20251001',
@@ -28,7 +26,7 @@ export async function runClaudeReview(
   stepInstructions?: string,
   onLog?: (msg: string) => void,
 ): Promise<string> {
-  const model = TIER_MODELS[quality.tier] ?? 'claude-sonnet-4-6'
+  const model = vendor.model ?? TIER_MODELS[quality.tier] ?? 'claude-sonnet-4-6'
   const effort = EFFORT_MAP[vendor.effort] ?? 'medium'
   const focusLine = quality.focus.length > 0
     ? `Focus areas: ${quality.focus.join(', ')}.`
@@ -45,32 +43,40 @@ export async function runClaudeReview(
     behaviorInstructions,
   ].filter(Boolean).join('\n')
 
-  const outputFile = join(mkdtempSync(join(tmpdir(), 'crosscheck-')), 'review.md')
-
   const args = [
     '--print',
-    '--bare',
     '--model', model,
     '--effort', effort,
     '--max-budget-usd', String(perReviewBudget),
-    '--output-last-message', outputFile,
-    '--allowedTools', 'Bash(git diff),Bash(git log)',
-    prompt,
+    '--output-format', 'json',
+    '--json-schema', JSON.stringify(REVIEW_OUTPUT_SCHEMA),
+    '--no-session-persistence',
+    '--setting-sources', 'user',
+    '--permission-mode', 'dontAsk',
+    '--tools', 'Read,Glob,Grep,Bash',
+    '--allowedTools', 'Read,Glob,Grep,Bash(git diff *),Bash(git log *),Bash(git show *)',
   ]
 
   onLog?.(`  running: claude --print --model ${model} --effort ${effort}`)
 
   try {
-    await execa('claude', args, {
+    const { stdout } = await execa('claude', args, {
       cwd: repoDir,
+      input: prompt,
       timeout: 180_000,
       env: { ...process.env },
     })
-    return readFileSync(outputFile, 'utf8').trim()
+    return parseClaudeReview(stdout)
   } catch (err: unknown) {
     const execa = err as { stdout?: string; stderr?: string; message?: string; exitCode?: number; timedOut?: boolean }
     const rawStderr = execa.stderr?.trim() ?? ''
-    const summary = (rawStderr.split('\n').filter(Boolean).at(-1)) ?? execa.message ?? 'unknown error'
+    let summary = (rawStderr.split('\n').filter(Boolean).at(-1)) ?? execa.message ?? 'unknown error'
+    if (!rawStderr && execa.stdout) {
+      try {
+        const result = JSON.parse(execa.stdout) as { result?: string; errors?: string[]; subtype?: string }
+        summary = result.result || result.errors?.join('; ') || result.subtype || summary
+      } catch { /* retain the process error for non-JSON output */ }
+    }
     const thrown = Object.assign(new Error(`claude: ${summary}`), {
       exitCode: execa.exitCode,
       timedOut: execa.timedOut,
@@ -82,8 +88,9 @@ export async function runClaudeReview(
 
 export async function checkClaudeAuth(): Promise<{ ok: boolean; detail: string }> {
   try {
-    const { stdout } = await execa('claude', ['--version'], { timeout: 10_000 })
-    return { ok: true, detail: stdout.trim() }
+    const { stdout } = await execa('claude', ['auth', 'status', '--json'], { timeout: 10_000 })
+    const auth = JSON.parse(stdout) as { loggedIn?: boolean; authMethod?: string }
+    return { ok: auth.loggedIn === true, detail: auth.loggedIn === true ? (auth.authMethod ?? 'authenticated') : 'not authenticated — run: claude auth login' }
   } catch (err: unknown) {
     const error = err as { stderr?: string; message?: string }
     return { ok: false, detail: error.stderr ?? error.message ?? 'not found' }

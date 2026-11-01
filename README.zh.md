@@ -262,6 +262,8 @@ tunnel:
 
 ## 系统要求
 
+支持 Windows、macOS 和 Linux。CI 会在三种系统的 Node 18、20、22 环境中运行测试、类型检查、lint 和构建。AI 审查还需要已登录的最新版供应商 CLI。
+
 | | 最低版本 |
 |---|---|
 | Node.js | 18+ |

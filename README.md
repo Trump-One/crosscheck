@@ -310,6 +310,8 @@ crosscheck registers the webhook automatically on first `watch` start — no man
 
 ## Requirements
 
+Windows, macOS and Linux are supported. CI runs tests, typecheck, lint and build on all three systems with Node 18, 20 and 22. AI reviews require authenticated, up-to-date vendor CLIs.
+
 | | Minimum |
 |---|---|
 | Node.js | 18+ |
