@@ -992,9 +992,9 @@ crosscheck webhook server
     ▼
 clone PR branch into temp directory
     │
-    ├─ codex review --base <branch>       ← non-interactive Codex review
+    ├─ codex exec --output-schema ...     ← structured Codex review
     │  or
-    └─ claude --print --bare ...          ← non-interactive Claude review
+    └─ claude --print --json-schema ...   ← structured Claude review
             │
             ▼
     post comment to PR via GitHub API
@@ -1044,25 +1044,27 @@ If none match, origin is `human` and the PR is skipped in cross-vendor mode.
 ### How Codex reviews run
 
 ```bash
-codex review --base <base-branch> --title "<pr-title>"
+codex exec --sandbox read-only --output-schema <schema.json> --output-last-message <review.json> -
 ```
 
-The `--base` flag diffs current HEAD against the base branch — exactly the PR diff. With `auth: subscription`, no model flag is passed. With `auth: api-key`, the model is selected by quality tier (`fast` → `gpt-4o-mini`, `balanced` → `o4-mini`, `thorough` → `o3`).
+crosscheck resolves the base branch (including remote-only branches) to a commit and passes the PR diff scope and step instructions through stdin. The JSON schema requires a review and a verdict; malformed or missing results fail the review rather than implying approval. Temporary schema/output files are removed after the command. With `auth: subscription`, no model flag is passed. With `auth: api-key`, an explicit model takes priority over the quality-tier default.
 
 ### How Claude reviews run
 
 ```bash
 claude \
-  --print --bare \
+  --print --output-format json \
   --model claude-sonnet-4-6 \
   --effort medium \
   --max-budget-usd 2.00 \
-  --output-last-message /tmp/review.md \
-  --allowedTools "Bash(git diff),Bash(git log)" \
-  "<prompt>"
+  --json-schema '<review-and-verdict-schema>' \
+  --no-session-persistence --setting-sources user \
+  --permission-mode dontAsk \
+  --tools "Read,Glob,Grep,Bash" \
+  --allowedTools "Read,Glob,Grep,Bash(git diff *),Bash(git log *),Bash(git show *)"
 ```
 
-`--bare` makes execution fast and deterministic. `--allowedTools` limits Claude to read-only git operations on the cloned repo.
+The prompt is supplied through stdin, and crosscheck validates `structured_output` from Claude's JSON response. `--bare` is omitted so subscription authentication remains available. Project settings are excluded, and tool permissions allow reading files and inspecting git history/diffs. An explicit `vendors.claude.model` overrides the tier default. Both adapters convert the structured verdict back to the existing `VERDICT:` format used by the workflow. Claude authentication checks use `claude auth status --json`, not the CLI version.
 
 ### Deduplication
 

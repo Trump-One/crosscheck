@@ -1,6 +1,7 @@
-import { execSync, execFileSync } from 'child_process'
+import { execSync } from 'child_process'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
+import { execa } from 'execa'
 import type { Config } from '../config/schema.js'
 
 const PROMPT_TEMPLATE = `You opened a pull request that received the following code review.
@@ -59,13 +60,14 @@ export async function runFixStep(
   let output = ''
   try {
     // Pass prompt via stdin — same pattern as optimize.ts
-    output = execFileSync('claude', ['--print', '--output-format', 'text'], {
+    const { stdout } = await execa('claude', ['--print', '--output-format', 'text'], {
+      cwd: tmpDir,
       input: prompt,
-      encoding: 'utf8',
       timeout: 180_000,
       env: { ...process.env },
       maxBuffer: 10 * 1024 * 1024,
-    }).trim()
+    })
+    output = stdout.trim()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (/not logged in|auth|credential/i.test(msg)) {
