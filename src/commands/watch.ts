@@ -1,5 +1,4 @@
-import { execSync, spawn } from 'child_process'
-import type { ChildProcess } from 'child_process'
+import { execFileSync, execSync, spawn, type ChildProcess } from 'child_process'
 import chalk from 'chalk'
 import { createWebhookServer, type PREvent } from '../github/webhook.js'
 import {
@@ -55,7 +54,9 @@ function computePRLoc(tmpDir: string, baseBranch: string): number {
 
 function detectCurrentRepo(): { owner: string; repo: string } | null {
   try {
-    const remote = execSync('git remote get-url origin 2>/dev/null', { encoding: 'utf8' }).trim()
+    const remote = execFileSync('git', ['remote', 'get-url', 'origin'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
     const m = remote.match(/github\.com[:/]([^/]+)\/([^/.]+)/)
     if (m) return { owner: m[1], repo: m[2] }
   } catch { /* ignore */ }
@@ -239,7 +240,7 @@ export async function runWatch(opts: WatchOpts = {}) {
       const tmpDir = mkdtempSync(join(tmpdir(), 'crosscheck-repo-'))
 
       try {
-        execSync(`gh repo clone ${owner}/${repoName} ${tmpDir} -- --depth=50 --quiet`, { stdio: 'pipe', env: { ...process.env, GITHUB_TOKEN: token, GH_TOKEN: token } })
+        execFileSync('gh', ['repo', 'clone', `${owner}/${repoName}`, tmpDir, '--', '--depth=50', '--quiet'], { stdio: 'pipe', env: { ...process.env, GITHUB_TOKEN: token, GH_TOKEN: token } })
         execSync(`git fetch origin pull/${prNumber}/head:pr-${prNumber}`, { cwd: tmpDir, stdio: 'pipe' })
         execSync(`git checkout pr-${prNumber}`, { cwd: tmpDir, stdio: 'pipe' })
         // Fetch the base branch after checking out the PR branch so we are never

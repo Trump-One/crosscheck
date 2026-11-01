@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import chalk from 'chalk'
 import { loadConfig } from '../config/loader.js'
 import type { ImpactConfig } from '../config/schema.js'
@@ -88,8 +88,8 @@ export function buildImpactReport(config: ImpactConfig, sinceDate?: string): Imp
   const weeklyMap = new Map<string, { reviews: number; blocks: number }>()
   const report: ImpactReport = {
     period: {
-      from: files[0]?.split('/').at(-1)?.replace('.ndjson', '') ?? 'N/A',
-      to: files.at(-1)?.split('/').at(-1)?.replace('.ndjson', '') ?? 'N/A',
+      from: files.length > 0 ? basename(files[0], '.ndjson') : 'N/A',
+      to: files.length > 0 ? basename(files[files.length - 1], '.ndjson') : 'N/A',
       log_files: files.length,
     },
     reviews_total: reviews.length,

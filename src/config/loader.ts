@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { createInterface } from 'readline'
 import { resolve, join, dirname } from 'path'
 import { homedir } from 'os'
@@ -38,8 +38,9 @@ export function getGithubTokenSource(): { token: string; source: 'gh-keyring' | 
   // treats them as the active credential and echoes them back — bypassing the
   // keyring entirely.
   try {
-    const t = execSync('gh auth token 2>/dev/null', {
+    const t = execFileSync('gh', ['auth', 'token'], {
       encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
       env: { ...process.env, GITHUB_TOKEN: undefined, GH_TOKEN: undefined },
     }).trim()
     if (t) return { token: t, source: 'gh-keyring' }
@@ -91,7 +92,9 @@ export function detectGitHubLogin(): string | null {
   ]
   for (const env of envVariants) {
     try {
-      const login = execSync("gh api user --jq '.login' 2>/dev/null", { encoding: 'utf8', env }).trim()
+      const login = execFileSync('gh', ['api', 'user', '--jq', '.login'], {
+        encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
       if (login && !login.includes('\n')) return login
     } catch { /* try next */ }
   }

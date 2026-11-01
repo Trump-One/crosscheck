@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { homedir } from 'os'
 import chalk from 'chalk'
 import { INDICATORS } from '../lib/languages.js'
@@ -239,8 +239,8 @@ export function buildDiagnoseReport(since?: string, logDir?: string): DiagnoseRe
     })
   }
 
-  const fromDate = files[0]?.split('/').at(-1)?.replace('.ndjson', '') ?? 'N/A'
-  const toDate = files.at(-1)?.split('/').at(-1)?.replace('.ndjson', '') ?? 'N/A'
+  const fromDate = files.length > 0 ? basename(files[0], '.ndjson') : 'N/A'
+  const toDate = files.length > 0 ? basename(files[files.length - 1], '.ndjson') : 'N/A'
 
   const totalReviews = started.size
   const successfulReviews = completed.size

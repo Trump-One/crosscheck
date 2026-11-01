@@ -8,8 +8,7 @@ import { execa } from 'execa'
 import { loadConfig } from '../config/loader.js'
 import { buildDiagnoseReport } from './diagnose.js'
 import { selectOptimizeAgent } from './optimize.js'
-import { sanitizeEntry, loadErrorEntriesForPattern, sanitizeDraftContent } from '../lib/log-analysis.js'
-import type { RawLogEntry } from '../lib/log-analysis.js'
+import { sanitizeEntry, loadErrorEntriesForPattern, sanitizeDraftContent, type RawLogEntry } from '../lib/log-analysis.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
