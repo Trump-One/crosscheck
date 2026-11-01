@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join, resolve } from 'path'
-import { homedir, platform, tmpdir } from 'os'
+import { homedir, platform } from 'os'
 import { createInterface } from 'readline'
 import chalk from 'chalk'
 import { execa } from 'execa'
+import { runTextAgent } from '../lib/agent-text.js'
 import { loadConfig } from '../config/loader.js'
 import { buildDiagnoseReport } from './diagnose.js'
 import { selectOptimizeAgent } from './optimize.js'
@@ -199,12 +200,8 @@ function buildOpportunityPrompt(
 }
 
 async function runWithClaude(prompt: string): Promise<string> {
-  let result
   try {
-    result = await execa('claude', ['--print', '--bare', prompt], {
-      timeout: 120_000,
-      env: { ...process.env },
-    })
+    return await runTextAgent('claude', prompt, 120_000)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (/not logged in|please run \/login|run \/login|403|request not allowed|failed to authenticate/i.test(msg)) {
@@ -212,27 +209,10 @@ async function runWithClaude(prompt: string): Promise<string> {
     }
     throw err
   }
-  return (result.stdout ?? result.stderr ?? '').trim()
 }
 
 async function runWithCodex(prompt: string): Promise<string> {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'crosscheck-issue-'))
-  try {
-    writeFileSync(join(tmpDir, 'ISSUE_PROMPT.md'), prompt)
-    const result = await execa('codex', [
-      'exec',
-      '--skip-git-repo-check',
-      'Read ISSUE_PROMPT.md and produce a GitHub issue draft. ' +
-      'Output exactly: TITLE: line, then ---, then the markdown body.',
-    ], {
-      cwd: tmpDir,
-      timeout: 180_000,
-      env: { ...process.env },
-    })
-    return (result.stdout ?? '').trim()
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
-  }
+  return runTextAgent('codex', prompt, 180_000)
 }
 
 function printDraft(title: string, body: string): void {

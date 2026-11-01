@@ -1,9 +1,9 @@
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join, resolve } from 'path'
-import { tmpdir, homedir } from 'os'
+import { homedir } from 'os'
 import chalk from 'chalk'
-import { execa } from 'execa'
+import { runTextAgent } from '../lib/agent-text.js'
 import yaml from 'js-yaml'
 import { loadConfig } from '../config/loader.js'
 import type { Config } from '../config/schema.js'
@@ -86,13 +86,8 @@ function unifiedDiff(oldText: string, newText: string): string {
 }
 
 async function runWithClaude(prompt: string): Promise<string> {
-  let result
   try {
-    result = await execa('claude', ['--print', '--bare'], {
-      input: prompt,
-      timeout: 120_000,
-      env: { ...process.env },
-    })
+    return await runTextAgent('claude', prompt, 120_000)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (/not logged in|please run \/login|run \/login/i.test(msg)) {
@@ -100,28 +95,10 @@ async function runWithClaude(prompt: string): Promise<string> {
     }
     throw err
   }
-  return (result.stdout ?? result.stderr ?? '').trim()
 }
 
 async function runWithCodex(prompt: string): Promise<string> {
-  // codex is an agent runner — write the prompt as a file so it can read it,
-  // avoiding shell argument length limits on large prompts.
-  const tmpDir = mkdtempSync(join(tmpdir(), 'crosscheck-optimize-'))
-  try {
-    writeFileSync(join(tmpDir, 'OPTIMIZE_PROMPT.md'), prompt)
-    const result = await execa('codex', [
-      '-q',
-      'Read OPTIMIZE_PROMPT.md carefully and produce the new instructions.md content. ' +
-      'Output only the file content — no explanation, no markdown fences.',
-    ], {
-      cwd: tmpDir,
-      timeout: 180_000,
-      env: { ...process.env },
-    })
-    return (result.stdout ?? '').trim()
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
-  }
+  return runTextAgent('codex', prompt, 180_000)
 }
 
 export async function runOptimize(opts: {
