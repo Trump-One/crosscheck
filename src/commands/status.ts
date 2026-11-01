@@ -1,7 +1,7 @@
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import chalk from 'chalk'
-import { loadConfig, getGithubTokenSource } from '../config/loader.js'
+import { loadConfig, getGithubTokenSource, getWebhookSecretPath } from '../config/loader.js'
 import { checkCodexAuth } from '../reviewers/codex.js'
 import { checkClaudeAuth } from '../reviewers/claude.js'
 import { getLogDir, getTodayLogPath } from '../lib/logger.js'
@@ -30,7 +30,10 @@ export async function runStatus(configPath?: string) {
   row('GITHUB_TOKEN', ghTokenDetail, tokenResult !== null)
 
   const webhookSecret = process.env.CROSSCHECK_WEBHOOK_SECRET ?? process.env.GITHUB_WEBHOOK_SECRET
-  row('WEBHOOK_SECRET', webhookSecret ? 'set' : 'missing (needed for serve/watch)', !!webhookSecret)
+  const secretDetail = webhookSecret ? 'set via env'
+    : existsSync(getWebhookSecretPath()) ? 'auto-managed file'
+    : 'auto-generated on first serve/watch'
+  row('WEBHOOK_SECRET', secretDetail, true)
 
   // Config
   console.log()

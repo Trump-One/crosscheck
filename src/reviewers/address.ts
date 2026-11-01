@@ -2,6 +2,7 @@ import { execSync } from 'child_process'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
 import { execa } from 'execa'
+import { CLAUDE_AUTOMATION_ARGS } from '../lib/claude-cli.js'
 import type { Config } from '../config/schema.js'
 
 const PROMPT_TEMPLATE = `You opened a pull request that received the following code review.
@@ -60,7 +61,10 @@ export async function runAddressStep(
   let output = ''
   try {
     // Pass prompt via stdin — same pattern as optimize.ts
-    const { stdout } = await execa('claude', ['--print', '--output-format', 'text'], {
+    const { stdout } = await execa('claude', [
+      '--print', '--output-format', 'text', ...CLAUDE_AUTOMATION_ARGS,
+      '--permission-mode', 'dontAsk', '--tools', 'Read,Glob,Grep', '--allowedTools', 'Read,Glob,Grep',
+    ], {
       cwd: tmpDir,
       input: prompt,
       timeout: 180_000,

@@ -2,6 +2,7 @@ import { execa } from 'execa'
 import type { QualityConfig, VendorConfig } from '../config/schema.js'
 import { DEFAULT_REVIEW_INSTRUCTIONS } from '../lib/workflow.js'
 import { parseClaudeReview, REVIEW_OUTPUT_SCHEMA } from './result.js'
+import { CLAUDE_AUTOMATION_ARGS } from '../lib/claude-cli.js'
 
 const TIER_MODELS: Record<string, string> = {
   fast: 'claude-haiku-4-5-20251001',
@@ -50,8 +51,7 @@ export async function runClaudeReview(
     '--max-budget-usd', String(perReviewBudget),
     '--output-format', 'json',
     '--json-schema', JSON.stringify(REVIEW_OUTPUT_SCHEMA),
-    '--no-session-persistence',
-    '--setting-sources', 'user',
+    ...CLAUDE_AUTOMATION_ARGS,
     '--permission-mode', 'dontAsk',
     '--tools', 'Read,Glob,Grep,Bash',
     '--allowedTools', 'Read,Glob,Grep,Bash(git diff *),Bash(git log *),Bash(git show *)',
