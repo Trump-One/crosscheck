@@ -1066,6 +1066,8 @@ claude \
 
 The prompt is supplied through stdin, and crosscheck validates `structured_output` from Claude's JSON response. `--bare` is omitted so subscription authentication remains available. Project settings are excluded, and tool permissions allow reading files and inspecting git history/diffs. An explicit `vendors.claude.model` overrides the tier default. Both adapters convert the structured verdict back to the existing `VERDICT:` format used by the workflow. Claude authentication checks use `claude auth status --json`, not the CLI version.
 
+All automated Claude review, fix and text-helper calls disable hooks and skills and use a strict, empty MCP configuration. Fix calls can read files but cannot run shell or edit tools; crosscheck applies the returned file blocks itself. Text-only helpers have no tools. This prevents checkout settings, hooks or MCP servers from starting programs on the operator's machine.
+
 ### Deduplication
 
 GitHub can fire both `opened` and `synchronize` events for the same push. crosscheck tracks `owner/repo#pr@sha` in an in-memory set and drops duplicate events for the same commit.

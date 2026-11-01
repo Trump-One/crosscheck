@@ -2,13 +2,13 @@ import { execa } from 'execa'
 import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { CLAUDE_AUTOMATION_ARGS } from './claude-cli.js'
 
 export async function runTextAgent(agent: 'claude' | 'codex', prompt: string, timeout: number): Promise<string> {
   let output: string
   if (agent === 'claude') {
     const { stdout } = await execa('claude', [
-      '--print', '--output-format', 'text', '--no-session-persistence',
-      '--setting-sources', 'user', '--tools', '',
+      '--print', '--output-format', 'text', ...CLAUDE_AUTOMATION_ARGS, '--tools', '',
     ], { input: prompt, timeout, env: { ...process.env } })
     output = stdout.trim()
   } else {

@@ -6,6 +6,7 @@ import { ConfigSchema } from '../config/schema.js'
 import { runCodexReview, checkCodexAuth } from '../reviewers/codex.js'
 import { runClaudeReview, checkClaudeAuth } from '../reviewers/claude.js'
 import { runFixStep } from '../reviewers/fix.js'
+import { runAddressStep } from '../reviewers/address.js'
 import { parseVerdict } from '../lib/verdict.js'
 import { runWorkflow, type WorkflowContext } from '../lib/runner.js'
 
@@ -93,6 +94,9 @@ describe('Claude structured reviews', () => {
     expect(args).not.toContain('--bare')
     expect(args).not.toContain('--output-last-message')
     expect(args).toEqual(expect.arrayContaining(['--print', '--output-format', 'json', '--json-schema', '--permission-mode', 'dontAsk']))
+    expect(args).toEqual(expect.arrayContaining(['--setting-sources', 'user', '--strict-mcp-config', '--disable-slash-commands']))
+    expect(JSON.parse(args[args.indexOf('--settings') + 1])).toEqual({ disableAllHooks: true })
+    expect(JSON.parse(args[args.indexOf('--mcp-config') + 1])).toEqual({ mcpServers: {} })
     expect(JSON.parse(args[args.indexOf('--json-schema') + 1]).required).toEqual(['review', 'verdict'])
     expect(options).toMatchObject({ cwd: repo, input: expect.stringContaining('main') })
   })
@@ -127,11 +131,15 @@ describe('authentication and fix invocation', () => {
     run.mockResolvedValue({ stdout: '', stderr: 'Logged in using ChatGPT\n' })
     expect(await checkCodexAuth()).toEqual({ ok: true, detail: 'Logged in using ChatGPT' })
   })
-  it('runs the Claude fix CLI in the checkout and supports npm command shims', async () => {
+  it.each([['fix', runFixStep], ['address', runAddressStep]] as const)('isolates %s from checkout hooks/MCP and supports npm command shims', async (_name, fix) => {
     run.mockResolvedValue({ stdout: '<file path="math.js">export const add = (a, b) => a + b\n</file>', stderr: '' })
-    expect(await runFixStep(repo, 'main', 'title', 'Fix arithmetic', '', config)).toEqual({ appliedCount: 1 })
+    expect(await fix(repo, 'main', 'title', 'Fix arithmetic', '', config)).toEqual({ appliedCount: 1 })
     expect(readFileSync(join(repo, 'math.js'), 'utf8')).toContain('a + b')
     expect(run).toHaveBeenCalledWith('claude', expect.any(Array), expect.objectContaining({ cwd: repo, input: expect.stringContaining('Fix arithmetic') }))
+    const args: string[] = run.mock.calls[0][1]
+    expect(args).toEqual(expect.arrayContaining(['--setting-sources', 'user', '--strict-mcp-config', '--tools', 'Read,Glob,Grep']))
+    expect(JSON.parse(args[args.indexOf('--settings') + 1])).toEqual({ disableAllHooks: true })
+    expect(JSON.parse(args[args.indexOf('--mcp-config') + 1])).toEqual({ mcpServers: {} })
   })
 })
 

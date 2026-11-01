@@ -747,6 +747,8 @@ claude \
 
 提示词通过 stdin 传入，crosscheck 校验 Claude JSON 响应中的 `structured_output`。不使用 `--bare`，以保留订阅认证支持。调用排除项目设置，工具权限允许读取文件和查看 git 历史、差异。显式配置的 `vendors.claude.model` 优先于质量层级默认值。两种适配器都会将结构化结论转换成工作流现有的 `VERDICT:` 格式。Claude 认证通过 `claude auth status --json` 检查，不再以 CLI 版本代替登录状态。
 
+所有自动 Claude 审查、修复和文本辅助调用都禁用钩子、技能，并使用严格的空 MCP 配置。修复调用只能读取文件，不能运行 shell 或编辑工具，由 crosscheck 自己应用返回的文件块；纯文本辅助调用不开放工具。这样可避免检出代码中的设置、钩子或 MCP 服务在运行机器上启动程序。
+
 ### 去重
 
 GitHub 可能对同一次推送同时触发 `opened` 和 `synchronize` 事件。crosscheck 在内存中追踪 `owner/repo#pr@sha`，丢弃同一 commit 的重复事件。

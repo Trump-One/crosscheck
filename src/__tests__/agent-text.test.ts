@@ -22,6 +22,9 @@ describe('noninteractive text helpers', () => {
     expect(args).not.toContain('--bare')
     expect(args).not.toContain(prompt)
     expect(args).toEqual(expect.arrayContaining(['--tools', '', '--output-format', 'text']))
+    expect(args).toEqual(expect.arrayContaining(['--setting-sources', 'user', '--strict-mcp-config', '--disable-slash-commands']))
+    expect(JSON.parse(args[args.indexOf('--settings') + 1])).toEqual({ disableAllHooks: true })
+    expect(JSON.parse(args[args.indexOf('--mcp-config') + 1])).toEqual({ mcpServers: {} })
     expect(options).toMatchObject({ input: prompt, timeout: 120000 })
   })
   it('uses codex exec outside Git and reads only the final response', async () => {
